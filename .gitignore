@@ -1,0 +1,14 @@
+# python
+.venv
+__pycache__
+*.egg-info
+dist
+
+# build
+build
+build-*
+build_*
+
+
+#Temp
+toolboox_samples
