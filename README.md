@@ -1,6 +1,18 @@
 # GreenHomeLan_ThreadDongle
 Client and server Thread (over CoAP) for makediary dongle for nrf52840
 
+## Flash prebuilt files
+If you want to flash the prebuit files, you dont need to setup the environement. 
+
+1. Push and hold the button and plug your dongle into the USB port to boot the dongle in UF2BOOT. It will mount as a Mass Storage Device called UF2BOOT.
+
+2. Drag and drop the .uf2 file onto the UF2BOOT volume.
+
+3. The dongle will reboot and run the aplication.
+
+
+# Dongles connection
+![Dongles connection](thread_dongles.png)
 
 ## Environement setup 
 
@@ -24,7 +36,6 @@ cmake --version
 python3 --version
 dtc --version
 ```
-
 
 Install west
 ``` 
@@ -72,3 +83,22 @@ sudo cp ~/zephyr-sdk-0.16.1/sysroots/x86_64-pokysdk-linux/usr/share/openocd/cont
 sudo udevadm control --reload
 ```
 
+## Build Client
+
+``` 
+chmod +x build.sh
+./build.sh thread_dongle_client
+```
+
+The .uf2 generated file can be find in build/thread_dongle_client.uf2
+
+## Build Server
+``` 
+chmod +x build.sh
+./build.sh thread_dongle_server
+```
+
+The .uf2 generated file can be find in build/thread_dongle_server.uf2
+
+## Flash the dongle
+To flash the dongle you can drag and drop the .uf2 files generated in the build step.
