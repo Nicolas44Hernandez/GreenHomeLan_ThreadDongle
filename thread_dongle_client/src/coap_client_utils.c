@@ -15,12 +15,11 @@
 
 #include "coap_client_utils.h"
 
-LOG_MODULE_REGISTER(coap_client_utils, CONFIG_COAP_CLIENT_UTILS_LOG_LEVEL);
-
 static bool is_connected;
 
 static struct k_work multicast_commands_work;
 static struct k_work ressources_status_work;
+static struct k_work send_alarm_work;
 static struct k_work wifi_status_work;
 static struct k_work presence_status_work;
 static struct k_work on_connect_work;
@@ -55,21 +54,43 @@ static struct server_ressources srv_ressources = {
     .presence_status = NULL,
 };
 
+static int on_commands_msg_reply(const struct coap_packet *response,
+                     struct coap_reply *reply,
+                     const struct sockaddr *from)
+{
+     ARG_UNUSED(reply);
+     ARG_UNUSED(from);   
+
+     const uint8_t *payload;
+     uint16_t payload_size = 0u; 
+     char *cmd_ok = "CMD:OK";
+
+     dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
+
+     payload = coap_packet_get_payload(response, &payload_size);
+
+     // Check if CMD:OK in payload
+     if (strstr(payload, cmd_ok) != NULL) {
+          printk("THREAD [DEBBUG]: commands msg reply: CMD_ACK\r\n"); 
+          dk_set_led_off(COMMANDS_MSG_LED);     
+     }
+exit:
+     return 0;
+}
+
+
 static void send_commands_to_server_message(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     // print message buffer
-     printk("Send 'commands' request: ");
-     for( int i =0; i < msg_len; i++ ){
-          printk("%c", msg_buf[i]);
-     }
-     printk("\r\n");
+     printk("THREAD [DEBBUG]: Sending command to server \r\n");
 
-     coap_send_request(
+     int ret_coap_req = coap_send_request(
           COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
-          commands_option, &msg_buf, MSG_BUFF_SIZE, NULL);
+          commands_option, &msg_buf, msg_len, on_commands_msg_reply);
      
+     dk_set_led_on(COMMANDS_MSG_LED);
+
      // Clear buffer
      msg_len = 0;
      for( int i =0; i < MSG_BUFF_SIZE; i++ ){
@@ -85,18 +106,13 @@ static int on_ressource_status_reply(const struct coap_packet *response,
      uint16_t payload_size = 0u;
 
      ARG_UNUSED(reply);
-     ARG_UNUSED(from);     
+     ARG_UNUSED(from);
+
+     printk("THREAD [DEBBUG]: Ressource status reply received from server \r\n");     
 
      dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
 
-     payload = coap_packet_get_payload(response, &payload_size);
-
-     // Print received payload
-     //printk("Received ressource status : ");
-     //for( int i =0; i < payload_size; i++ ){
-          //printk("%c", payload[i]);
-     //}
-     //printk("\r\n"); 
+     payload = coap_packet_get_payload(response, &payload_size); 
 
      // Check if wifi in payload
      char* wifi_in_payload = strchr(payload, 'w');
@@ -121,18 +137,37 @@ static void send_ressources_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     //printk("Send 'ressources status' request\n\r");
+     printk("THREAD [DEBBUG]: Sending ressources status request to server \r\n");
+
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
                  ressources_status_option, NULL, 0u, on_ressource_status_reply);
      dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
 }
 
+static void send_alarm(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending alarm to server \r\n");
+
+     static uint8_t msg_buf[] = ALARM0;
+     uint16_t msg_len = sizeof(msg_buf);
+
+     int ret_coap_req = coap_send_request(
+          COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
+          commands_option, &msg_buf, msg_len, on_commands_msg_reply);
+     
+     dk_set_led_on(COMMANDS_MSG_LED);
+}
+
+
 static void send_wifi_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     //printk("Send 'wifi status' request\n\r");
+     printk("THREAD [DEBBUG]: Sending wifi status request to server \r\n");
+
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
                  wifi_status_option, NULL, 0u, on_ressource_status_reply);
@@ -143,7 +178,8 @@ static void send_presence_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     //printk("Send 'presence status' request\n\r");
+     printk("THREAD [DEBBUG]: Sending presence status request to server \r\n");
+
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
                  presence_status_option, NULL, 0u, on_ressource_status_reply);
@@ -181,7 +217,7 @@ static void submit_work_if_connected(struct k_work *work)
      if (is_connected) {
           k_work_submit(work);
      } else {
-          printk("Connection is broken \r\n");
+          printk("THREAD [ERROR]: Connection is broken \r\n");
      }
 }
 
@@ -194,6 +230,7 @@ void coap_client_utils_init(ot_connection_cb_t on_connect, ot_disconnection_cb_t
      k_work_init(&on_disconnect_work, on_disconnect);
      k_work_init(&multicast_commands_work, send_commands_to_server_message);
      k_work_init(&ressources_status_work, send_ressources_status_request);
+     k_work_init(&send_alarm_work, send_alarm);
      k_work_init(&wifi_status_work, send_wifi_status_request);
      k_work_init(&presence_status_work, send_presence_status_request);
 
@@ -216,6 +253,11 @@ void coap_client_send_ressources_status_request(void)
      submit_work_if_connected(&ressources_status_work);
 }
 
+void coap_client_send_alarm(void)
+{
+     submit_work_if_connected(&send_alarm_work);
+}
+
 void coap_client_send_wifi_status_request(void)
 {
      submit_work_if_connected(&wifi_status_work);
@@ -227,7 +269,15 @@ void coap_client_send_presence_status_request(void)
 }
 
 void print_orchestrator_server_ressources(void){
-     printk("Server ressources   ");
+     printk("ORCHESTRATOR [DEBBUG]: Server ressources   ");
      printk("wifi: %s   ", srv_ressources.wifi_status ? "true" : "false");
      printk("presence: %s\n\r", srv_ressources.presence_status ? "true" : "false");     
+}
+
+bool get_server_wifi_status(void){
+     return srv_ressources.wifi_status;
+}
+
+bool get_server_presence_status(void){
+     return srv_ressources.presence_status;
 }

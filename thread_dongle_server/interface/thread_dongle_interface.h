@@ -9,13 +9,15 @@
 
 #define COAP_PORT 5683
 
-#define MSG_BUFF_SIZE 20
+#define MSG_BUFF_SIZE 2000
 #define MSG_MAX_SIZE 10
 
 #define COMMANDS_URI_PATH "commands"
 #define RESSOURCES_URI_PATH "ressources"
 #define WIFI_URI_PATH "wifi"
 #define PRESENCE_URI_PATH "presence"
+
+#define ALARM0 "ALARM0"
 
 
 /*LEDS configuration*/

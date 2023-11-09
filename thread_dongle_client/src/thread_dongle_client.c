@@ -16,11 +16,11 @@
 
 #include "coap_client_utils.h"
 
-LOG_MODULE_REGISTER(coap_client, CONFIG_COAP_CLIENT_LOG_LEVEL);
+// Server polling period
+#define SERVER_POLLING_PERIOD_MS 5000
 
 // UART variables
-#define SLEEP_TIME_MS   10000
-#define UART_RECEIVE_TIMEOUT 100
+#define UART_RECEIVE_TIMEOUT 500000
 #define START_CHAR '~'
 #define END_CHAR '#'
 
@@ -29,7 +29,32 @@ static uint8_t rx_buf[MSG_BUFF_SIZE] = {0};
 static uint8_t rx_msg_buf[MSG_MAX_SIZE] = {0};
 static uint8_t rx_offset=0;
 
+/*Send the server ressources status via uart*/
+static void uart_send_server_ressources_status(){
 
+    bool wifi_status = get_server_wifi_status();
+    bool presence_status = get_server_presence_status();
+
+    printk("SERVER [DEBBUG]: current ressources status  wifi:%d   presence:%d\r\n", wifi_status, presence_status);
+
+    // msg buffer
+    static uint8_t tx_buf[] =   "~wifi:0prs:0#";
+
+    // Add wifi status
+    if(wifi_status){tx_buf[6] = '1';}
+    else{tx_buf[6] = '0';}
+
+    // Add presence status
+    if(presence_status){tx_buf[11] = '1';}
+    else{tx_buf[11] = '0';}
+
+    int ret = uart_tx(uart, tx_buf, sizeof(tx_buf), SYS_FOREVER_MS);
+    printk("UART [DEBBUG]: Sending ressources status via UART: %s\r\n", tx_buf);
+    if (ret) {
+        printk("UART [ERROR]: Impossible to send message over UART\r\n");
+        return 1;
+    }
+}
 /* Process received char from UART */
 static void process_received_char(char received_char)
 {
@@ -42,12 +67,12 @@ static void process_received_char(char received_char)
 		return;
 	}
 	if(received_char == END_CHAR){
-		printk("Received message:");
+		printk("UART [DEBBUG]: Received message: ");
 		for( int i =0; i < rx_offset; i++ ){
 			printk("%c", rx_msg_buf[i]);
         }
 		printk("\r\n");
-        printk("Transfer message via thread\r\n");
+        printk("THREAD [DEBBUG]: Transfer received message via thread\r\n");
          
         coap_client_send_commands_to_server_message(&rx_msg_buf, rx_offset);        
 		return;
@@ -60,19 +85,16 @@ static void process_received_char(char received_char)
 
 } 
 
-
 /*Callback for uart messages reception*/
 static void on_uart_message(const struct device *uart_dev, struct uart_event *evt, void *user_data)
 {
     //printk("UART event\r\n");
 	switch (evt->type) {				
 	case UART_RX_RDY:
-
-        if((evt->data.rx.len) == 1)
-		{
-			process_received_char(evt->data.rx.buf[evt->data.rx.offset]);
-		}		
-		break;		
+        for( int i =0; i < evt->data.rx.len; i++ ){
+			process_received_char(evt->data.rx.buf[evt->data.rx.offset + i]);
+        }	
+		break;			
 	case UART_RX_DISABLED:
 		uart_rx_enable(uart_dev, rx_buf, sizeof(rx_buf), UART_RECEIVE_TIMEOUT);
 		break;
@@ -96,34 +118,29 @@ static void on_ot_disconnect(struct k_work *item)
 static void on_button_changed(uint32_t button_state, uint32_t has_changed)
 {
     uint32_t buttons = button_state & has_changed;
-    // TODO: send test connection message    
     if (buttons & DK_BTN1_MSK) {
-        //coap_client_send_ressources_status_request();
-        //coap_client_send_wifi_status_request();
-        //coap_client_send_presence_status_request();
-        print_orchestrator_server_ressources();
+        coap_client_send_alarm();
     }
 }
 
 int main(void)
 {
     int ret;
-    printk("Start CoAP-client sample");
 
     ret = dk_buttons_init(on_button_changed);
     if (ret) {
-        printk("Cannot init buttons (error: %d)", ret);
+        printk("BUTTONS [ERROR]: Cannot init buttons (error: %d)", ret);
         return 0;
     }
 
     ret = dk_leds_init();
     if (ret) {
-        printk("Cannot init leds, (error: %d)", ret);
+        printk("LEDS [ERROR]: Cannot init leds, (error: %d)", ret);
         return 0;
     }
 
     if (!device_is_ready(uart)){
-		printk("UART device not ready\r\n");
+		printk("UART [ERROR]: UART device not ready\r\n");
 		return 1 ;
 	}
 
@@ -148,7 +165,7 @@ int main(void)
     // Register uart callback function    
     ret = uart_callback_set(uart, on_uart_message, NULL);
     if (ret) {
-        printk("Imposible to registre callback ret=%d\r\n", ret);	
+        printk("UART [ERROR]: Imposible to registre callback ret=%d\r\n", ret);	
         return 1;
     } 
 
@@ -156,13 +173,11 @@ int main(void)
     uart_rx_enable(uart, rx_buf, sizeof(rx_buf), UART_RECEIVE_TIMEOUT);
     
     // loop forever waiting for uart messages
-    while (1) {        
-        k_msleep(SLEEP_TIME_MS/2);
+    while (1) {                
         coap_client_send_ressources_status_request();
-        k_msleep(SLEEP_TIME_MS/2);
-        coap_client_send_wifi_status_request();
-        k_msleep(SLEEP_TIME_MS/2);
-        coap_client_send_presence_status_request();
+        k_msleep(SERVER_POLLING_PERIOD_MS*0.2); 
+        uart_send_server_ressources_status();
+        k_msleep(SERVER_POLLING_PERIOD_MS*0.8);        
 	}
     return 0;
 }

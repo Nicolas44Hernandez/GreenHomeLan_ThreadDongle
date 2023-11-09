@@ -57,6 +57,18 @@ void coap_client_send_presence_status_request(void);
  */
 void print_orchestrator_server_ressources(void);
 
+/** @brief Returns the orchestrator wifi status.
+ *
+ */
+bool get_server_wifi_status(void);
+
+/** @brief Returns the orchestrator presence status.
+ *
+ */
+bool get_server_presence_status(void);
+
+
+
 
 #endif
 
