@@ -14,8 +14,6 @@
 #include <openthread/thread.h>
 #include "ot_coap_utils.h"
 
-LOG_MODULE_REGISTER(ot_coap_utils, CONFIG_OT_COAP_UTILS_LOG_LEVEL);
-
 uint8_t msg_buf[MSG_BUFF_SIZE];
 uint16_t msg_len = 0; 
 
@@ -70,15 +68,13 @@ static otCoapResource commands_resource = {
     .mNext = NULL,
 };
 
-//TEMP
-void switch_wifi_status(){
-    srv_context.wifi_status = !srv_context.wifi_status;
-    printk("New wifi status: %s \n\r", srv_context.wifi_status ? "true" : "false");
+void set_wifi_status(bool new_status){
+    srv_context.wifi_status = new_status;
+    printk("SERVER [DEBBUG]: New wifi status: %s \n\r", srv_context.wifi_status ? "true" : "false");
 }
-//TEMP
-void switch_presence_status(){
-    srv_context.presence_status = !srv_context.presence_status;
-    printk("New presence status: %s \n\r", srv_context.presence_status ? "true" : "false");
+void set_presence_status(bool new_status){
+    srv_context.presence_status = new_status;
+    printk("SERVER [DEBBUG]: New presence status: %s \n\r", srv_context.presence_status ? "true" : "false");
 }
 
 static otError ressources_status_response_send(otMessage *request_message,
@@ -110,19 +106,17 @@ static otError ressources_status_response_send(otMessage *request_message,
     // Append wifi status to payload
     uint8_t *wifi_payload = srv_context.wifi_status ? "wifi:1" : "wifi:0";
     uint16_t wifi_payload_size = strlen(wifi_payload);
-    printk("wifi_payload: %s  wifi_payload_size: %d \n\r", wifi_payload, wifi_payload_size);
     
     // Append ressources status to payload
     uint8_t *presence_payload = srv_context.presence_status ? " prs:1" : " prs:0";
     uint16_t presence_payload_size = strlen(presence_payload);
-    printk("presence_payload: %s  presence_payload_size: %d \n\r", presence_payload, presence_payload_size);
 
     // Get payload size
     uint16_t payload_size = wifi_payload_size + presence_payload_size + 1;
     uint8_t *payload = (uint8_t*) malloc(payload_size * sizeof(uint8_t));
 
     if(payload == NULL) {
-        printk("Error in payload memory alocation");
+        printk("THREAD [ERROR]: Error in payload memory alocation");
         error = OT_ERROR_FAILED; 
         goto end;
     }
@@ -138,8 +132,7 @@ static otError ressources_status_response_send(otMessage *request_message,
         
     }
     payload[payload_size - 1 ] = '\0';
-
-    printk("payload: %s  payload_size: %d \n\r", payload, payload_size);
+    printk("THREAD [DEBBUG]: Sending response payload: %s  payload_size: %d \n\r", payload, payload_size);
 
     error = otMessageAppend(response, payload, payload_size);
     if (error != OT_ERROR_NONE) {
@@ -165,7 +158,7 @@ static void ressources_status_request_handler(void *context, otMessage *message,
 
     ARG_UNUSED(context);
 
-    printk("Received ressources status request\r\n");
+    printk("THREAD [DEBBUG]: Received ressources status request\r\n");
 
     if ((otCoapMessageGetType(message) == OT_COAP_TYPE_NON_CONFIRMABLE) &&
         (otCoapMessageGetCode(message) == OT_COAP_CODE_GET)) {
@@ -209,7 +202,7 @@ static otError wifi_status_response_send(otMessage *request_message,
     uint8_t *payload = srv_context.wifi_status ? "wifi:1" : "wifi:0";
     uint16_t payload_size = strlen(payload) + 1;
 
-    printk("Wifi response payload: %s  payload_size: %d \n\r", payload, payload_size);
+    printk("THREAD [DEBBUG]: Wifi response payload: %s  payload_size: %d \n\r", payload, payload_size);
 
     error = otMessageAppend(response, payload, payload_size);
     if (error != OT_ERROR_NONE) {
@@ -234,7 +227,7 @@ static void wifi_status_request_handler(void *context, otMessage *message,
 
     ARG_UNUSED(context);
 
-    printk("Received wifi status request\r\n");
+    printk("THREAD [DEBBUG]: Received wifi status request\r\n");
 
     if ((otCoapMessageGetType(message) == OT_COAP_TYPE_NON_CONFIRMABLE) &&
         (otCoapMessageGetCode(message) == OT_COAP_CODE_GET)) {
@@ -278,7 +271,7 @@ static otError presence_status_response_send(otMessage *request_message,
     uint8_t *payload = srv_context.presence_status ? "prs:1" : "prs:0";
     uint16_t payload_size = strlen(payload) + 1;
 
-    printk("Presence response payload: %s  payload_size: %d \n\r", payload, payload_size);
+    printk("THREAD [DEBBUG]: Presence response payload: %s  payload_size: %d \n\r", payload, payload_size);
 
     error = otMessageAppend(response, payload, payload_size);
     if (error != OT_ERROR_NONE) {
@@ -303,7 +296,7 @@ static void presence_status_request_handler(void *context, otMessage *message,
 
     ARG_UNUSED(context);
 
-    printk("Received presence status request\r\n");
+    printk("THREAD [DEBBUG]: Received presence status request\r\n");
 
     if ((otCoapMessageGetType(message) == OT_COAP_TYPE_NON_CONFIRMABLE) &&
         (otCoapMessageGetCode(message) == OT_COAP_CODE_GET)) {
@@ -317,25 +310,81 @@ static void presence_status_request_handler(void *context, otMessage *message,
     }
 }
 
+static otError commands_msg_response_send(otMessage *request_message,
+                      const otMessageInfo *message_info)
+{
+    otError error = OT_ERROR_NO_BUFS;
+    otMessage *response;    
+
+    response = otCoapNewMessage(srv_context.ot, NULL);
+    if (response == NULL) {
+        goto end;
+    }
+
+    otCoapMessageInit(response, OT_COAP_TYPE_NON_CONFIRMABLE,
+              OT_COAP_CODE_CONTENT);
+
+    error = otCoapMessageSetToken(
+        response, otCoapMessageGetToken(request_message),
+        otCoapMessageGetTokenLength(request_message));
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    error = otCoapMessageSetPayloadMarker(response);
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    // Append presence status to payload
+    uint8_t *payload = "CMD:OK";
+    uint16_t payload_size = strlen(payload) + 1;
+
+    error = otMessageAppend(response, payload, payload_size);
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    error = otCoapSendResponse(srv_context.ot, response, message_info);
+
+end:
+    if (error != OT_ERROR_NONE && response != NULL) {
+        otMessageFree(response);
+    }
+
+    return error;
+}
+
 static void commands_request_handler(void *context, otMessage *message,
                   const otMessageInfo *message_info)
 {
+
+    otError error;
+    otMessageInfo msg_info;
+
     ARG_UNUSED(context);
 
+    printk("THREAD [DEBBUG]: Commands message received\r\n");
+    ARG_UNUSED(context);   
+
     if (otCoapMessageGetType(message) != OT_COAP_TYPE_NON_CONFIRMABLE) {
-        printk("Commands handler - Unexpected type of message");
+        printk("THREAD [ERROR]: Commands handler - Unexpected type of message");
         goto end;
     }
 
     if (otCoapMessageGetCode(message) != OT_COAP_CODE_PUT) {
-        printk("Commands handler - Unexpected CoAP code");
+        printk("THREAD [ERROR]: Commands handler - Unexpected CoAP code");
         goto end;
     }
 
-    msg_len = otMessageRead(message, otMessageGetOffset(message), msg_buf, MSG_BUFF_SIZE);
+    msg_info = *message_info;
+    memset(&msg_info.mSockAddr, 0, sizeof(msg_info.mSockAddr));
 
-    srv_context.on_commands_request(&msg_buf, msg_len);
-
+    error = commands_msg_response_send(message, &msg_info);
+    if (error == OT_ERROR_NONE) {
+        msg_len = otMessageRead(message, otMessageGetOffset(message), msg_buf, MSG_BUFF_SIZE);
+        srv_context.on_commands_request(&msg_buf, msg_len);
+    }   
 end:
     return;
 }
@@ -343,12 +392,10 @@ end:
 static void coap_default_handler(void *context, otMessage *message,
                  const otMessageInfo *message_info)
 {
+    printk("THREAD [DEBBUG]: Uncontext msg received\r\n");
     ARG_UNUSED(context);
     ARG_UNUSED(message);
     ARG_UNUSED(message_info);
-
-    LOG_INF("Received CoAP message that does not match any request "
-        "or resource");
 }
 
 int ot_coap_init(
@@ -370,7 +417,6 @@ int ot_coap_init(
 
     srv_context.ot = openthread_get_default_instance();
     if (!srv_context.ot) {
-        LOG_ERR("There is no valid OpenThread instance");
         error = OT_ERROR_FAILED;
         goto end;
     }
@@ -395,7 +441,6 @@ int ot_coap_init(
 
     error = otCoapStart(srv_context.ot, COAP_PORT);
     if (error != OT_ERROR_NONE) {
-        LOG_ERR("Failed to start OT CoAP. Error: %d", error);
         goto end;
     }
 

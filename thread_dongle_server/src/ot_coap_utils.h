@@ -29,7 +29,11 @@ int ot_coap_init(
     commands_request_callback_t on_commands_request
 );
 
-void switch_wifi_status();
-void switch_presence_status();
+/**@brief Type definition of the function used to set wifi status resource msg.
+ */
+void set_wifi_status(bool new_status);
+/**@brief Type definition of the function used to set presence status resource msg.
+ */
+void set_presence_status(bool new_status);
 
 #endif

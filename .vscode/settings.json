@@ -1,0 +1,14 @@
+{
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "cstring": "c",
+        "array": "c",
+        "bitset": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "span": "c",
+        "regex": "c",
+        "utility": "c",
+        "uart.h": "c"
+    }
+}
