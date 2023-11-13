@@ -9,6 +9,8 @@
         "span": "c",
         "regex": "c",
         "utility": "c",
-        "uart.h": "c"
+        "uart.h": "c",
+        "printk.h": "c",
+        "util.h": "c"
     }
 }
