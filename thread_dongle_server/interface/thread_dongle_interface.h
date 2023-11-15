@@ -20,6 +20,7 @@
 #define ALARM0 "ALARM0"
 #define KEEP_ALIVE_DEVICE_ID_1 "bt_1_10"
 #define KEEP_ALIVE_DEVICE_ID_2 "bt_2_20"
+#define KEEP_ALIVE_DEVICE_ID_3 "bt_3_30"
 
 
 /*LEDS configuration*/

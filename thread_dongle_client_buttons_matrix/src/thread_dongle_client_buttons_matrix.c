@@ -18,8 +18,9 @@
 #include "coap_client_utils.h"
 
 // Buttons pressed check period
-#define BUTTONS_PRESS_PERIOD_MS   100
-#define TOGGLE_DEBOUNCE_PERIOD_MS 10
+#define BUTTONS_PRESS_PERIOD_MS    100
+#define KEEP_ALIVE_MSG_PERIOD_MS   10000
+#define TOGGLE_DEBOUNCE_PERIOD_MS  10
 
 // Setup for L1 and L2
 static const struct gpio_dt_spec line_1 = GPIO_DT_SPEC_GET(DT_ALIAS(line1), gpios);
@@ -133,10 +134,17 @@ int main(void)
     // Init thread/coap
     coap_client_utils_init(on_ot_connect, on_ot_disconnect);   
 
+    int wait_loops_for_ka = KEEP_ALIVE_MSG_PERIOD_MS / BUTTONS_PRESS_PERIOD_MS;
+    int loops_count = 0;
     while (1) {
         k_msleep(BUTTONS_PRESS_PERIOD_MS);
         toggle_matrix_lines();
-        check_buttons();  
+        check_buttons(); 
+        if (loops_count >=wait_loops_for_ka ){
+            coap_client_send_keep_alive();   
+            loops_count = 0;
+        } 
+        loops_count ++;
     }
     return 0;
 }

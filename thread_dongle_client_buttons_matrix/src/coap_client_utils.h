@@ -31,6 +31,11 @@ typedef void (*ot_disconnection_cb_t)(struct k_work *item);
 void coap_client_utils_init(ot_connection_cb_t on_connect,
                    ot_disconnection_cb_t on_disconnect);
 
+/** @brief Request for post keep alive msg.
+ *
+ */
+void coap_client_send_keep_alive(void);
+
 /** @brief Send a action to the CoAP server node.
  *
  * @note The CoAP server should be paired before to have an affect.

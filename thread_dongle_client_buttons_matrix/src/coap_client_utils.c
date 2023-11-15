@@ -18,6 +18,7 @@
 static bool is_connected;
 
 static struct k_work multicast_commands_work;
+static struct k_work send_keep_alive_work;
 static struct k_work on_connect_work;
 static struct k_work on_disconnect_work;
 
@@ -80,6 +81,21 @@ static void send_commands_to_server_message(struct k_work *item)
      cmd_to_send_nb = 0; 
 }
 
+static void send_keep_alive(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending keep alive msg to server \r\n");
+
+     static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_3;
+     uint16_t msg_len = sizeof(msg_buf);
+
+     int ret_coap_req = coap_send_request(
+          COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
+          commands_option, &msg_buf, msg_len, on_commands_msg_reply);
+     
+     dk_set_led_on(COMMANDS_MSG_LED);
+}
 static void on_thread_state_changed(otChangedFlags flags, struct openthread_context *ot_context,
                         void *user_data)
 {
@@ -123,6 +139,7 @@ void coap_client_utils_init(ot_connection_cb_t on_connect, ot_disconnection_cb_t
      k_work_init(&on_connect_work, on_connect);
      k_work_init(&on_disconnect_work, on_disconnect);
      k_work_init(&multicast_commands_work, send_commands_to_server_message);
+     k_work_init(&send_keep_alive_work, send_keep_alive);
 
      openthread_state_changed_cb_register(openthread_get_default_context(), &ot_state_chaged_cb);
      openthread_start(openthread_get_default_context());
@@ -135,4 +152,9 @@ void coap_client_send_command_to_server_message(uint16_t cmd_number){
      cmd_to_send_nb = cmd_number;
       
      submit_work_if_connected(&multicast_commands_work);
+}
+
+void coap_client_send_keep_alive(void)
+{
+     submit_work_if_connected(&send_keep_alive_work);
 }
