@@ -18,6 +18,8 @@
 #define PRESENCE_URI_PATH "presence"
 
 #define ALARM0 "ALARM0"
+#define KEEP_ALIVE_DEVICE_ID_1 "bt_1_10"
+#define KEEP_ALIVE_DEVICE_ID_2 "bt_2_20"
 
 
 /*LEDS configuration*/

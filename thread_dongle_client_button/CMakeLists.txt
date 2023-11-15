@@ -7,7 +7,7 @@ cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(thread_coap_client_dongle)
+project(thread_coap_client_dongle_button)
 
 # NORDIC SDK APP START
 target_sources(app PRIVATE src/thread_dongle_client.c
