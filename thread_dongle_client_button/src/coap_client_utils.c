@@ -152,7 +152,7 @@ static void send_alarm(struct k_work *item)
 
      printk("THREAD [DEBBUG]: Sending alarm to server \r\n");
 
-     static uint8_t msg_buf[] = ALARM0;
+     static uint8_t msg_buf[] = CMD1;
      uint16_t msg_len = sizeof(msg_buf);
 
      int ret_coap_req = coap_send_request(

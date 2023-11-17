@@ -17,7 +17,7 @@
 #include "coap_client_utils.h"
 
 // Server polling period
-#define SERVER_POLLING_PERIOD_MS 5000
+#define SERVER_POLLING_PERIOD_MS 10000
 
 // UART variables
 #define UART_RECEIVE_TIMEOUT 500000
@@ -177,7 +177,7 @@ int main(void)
         coap_client_send_ressources_status_request();
         k_msleep(SERVER_POLLING_PERIOD_MS*0.2); 
         uart_send_server_ressources_status();
-        k_msleep(SERVER_POLLING_PERIOD_MS*0.8);        
+        k_msleep(SERVER_POLLING_PERIOD_MS*0.8);     
 	}
     return 0;
 }

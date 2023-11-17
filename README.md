@@ -102,3 +102,8 @@ The .uf2 generated file can be find in build/thread_dongle_server.uf2
 
 ## Flash the dongle
 To flash the dongle you can drag and drop the .uf2 files generated in the build step.
+
+
+
+#TODO
+[ ] Update readme file

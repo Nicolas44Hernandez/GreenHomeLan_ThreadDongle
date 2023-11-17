@@ -47,6 +47,11 @@ void coap_client_send_ressources_status_request(void);
  */
 void coap_client_send_wifi_status_request(void);
 
+/** @brief Request for post button alarm.
+ *
+ */
+void coap_client_send_alarm(void);
+
 /** @brief Request for the CoAP presence status ressource.
  *
  */
