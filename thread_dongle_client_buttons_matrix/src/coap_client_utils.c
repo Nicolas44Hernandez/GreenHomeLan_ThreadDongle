@@ -67,9 +67,9 @@ static void send_commands_to_server_message(struct k_work *item)
 
      printk("THREAD [DEBBUG]: Sending command to server \r\n");
      
-     uint8_t msg_buf[] = "CMDX";
-     uint16_t msg_len = 4;
-     msg_buf[3] = cmd_to_send_nb + '0';     
+     uint8_t msg_buf[] = "cmd_X ";
+     uint16_t msg_len = 6;
+     msg_buf[4] = cmd_to_send_nb + '0';     
 
      int ret_coap_req = coap_send_request(
           COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
