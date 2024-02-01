@@ -34,11 +34,12 @@ static void uart_send_server_ressources_status(){
 
     bool wifi_status = get_server_wifi_status();
     bool presence_status = get_server_presence_status();
+    bool electrical_status = get_server_electrical_status();
 
-    printk("SERVER [DEBBUG]: current ressources status  wifi:%d   presence:%d\r\n", wifi_status, presence_status);
+    printk("SERVER [DEBBUG]: current ressources status  wifi:%d   presence:%d   electrical:%d\r\n", wifi_status, presence_status, electrical_status);
 
     // msg buffer
-    static uint8_t tx_buf[] =   "~wifi:0prs:0#";
+    static uint8_t tx_buf[] =   "~wifi:0prs:0ele:0#";
 
     // Add wifi status
     if(wifi_status){tx_buf[6] = '1';}
@@ -47,6 +48,10 @@ static void uart_send_server_ressources_status(){
     // Add presence status
     if(presence_status){tx_buf[11] = '1';}
     else{tx_buf[11] = '0';}
+
+    // Add electrical status
+    if(electrical_status){tx_buf[16] = '1';}
+    else{tx_buf[16] = '0';}
 
     int ret = uart_tx(uart, tx_buf, sizeof(tx_buf), SYS_FOREVER_MS);
     printk("UART [DEBBUG]: Sending ressources status via UART: %s\r\n", tx_buf);

@@ -22,6 +22,7 @@ static struct k_work ressources_status_work;
 static struct k_work send_alarm_work;
 static struct k_work wifi_status_work;
 static struct k_work presence_status_work;
+static struct k_work electrical_status_work;
 static struct k_work on_connect_work;
 static struct k_work on_disconnect_work;
 
@@ -30,6 +31,7 @@ static const char *const commands_option[] = { COMMANDS_URI_PATH, NULL };
 static const char *const ressources_status_option[] = { RESSOURCES_URI_PATH, NULL };
 static const char *const wifi_status_option[] = { WIFI_URI_PATH, NULL };
 static const char *const presence_status_option[] = { PRESENCE_URI_PATH, NULL };
+static const char *const electrical_status_option[] = { ELECTRIC_URI_PATH, NULL };
 
 volatile uint8_t msg_buf[MSG_BUFF_SIZE] = {0};
 uint16_t msg_len = 0;
@@ -47,11 +49,13 @@ static struct sockaddr_in6 multicast_local_addr = {
 struct server_ressources {
     bool wifi_status;
     bool presence_status;
+    bool electrical_status;
 };
 
 static struct server_ressources srv_ressources = {
     .wifi_status = NULL,
     .presence_status = NULL,
+    .electrical_status = NULL,
 };
 
 static int on_commands_msg_reply(const struct coap_packet *response,
@@ -125,9 +129,16 @@ static int on_ressource_status_reply(const struct coap_packet *response,
      char* presence_in_payload = strchr(payload, 'p');
      if(*presence_in_payload != NULL){
           const char presence_status_char = (char)presence_in_payload[4];
-          srv_ressources.presence_status = presence_status_char == '1' ? true : false;  
-            
+          srv_ressources.presence_status = presence_status_char == '1' ? true : false;              
      }
+
+     // Check if electrical in payload
+     char* electrical_in_payload = strchr(payload, 'e');
+     if(*electrical_in_payload != NULL){
+          const char electrical_status_char = (char)electrical_in_payload[4];
+          srv_ressources.electrical_status = electrical_status_char == '1' ? true : false;              
+     }
+
      print_orchestrator_server_ressources();
 exit:
      return 0;
@@ -186,6 +197,18 @@ static void send_presence_status_request(struct k_work *item)
      dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
 }
 
+static void send_electrical_status_request(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending electrical status request to server \r\n");
+
+     coap_send_request(COAP_METHOD_GET,
+                 (const struct sockaddr *)&multicast_local_addr,
+                 electrical_status_option, NULL, 0u, on_ressource_status_reply);
+     dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+}
+
 static void on_thread_state_changed(otChangedFlags flags, struct openthread_context *ot_context,
                         void *user_data)
 {
@@ -233,6 +256,7 @@ void coap_client_utils_init(ot_connection_cb_t on_connect, ot_disconnection_cb_t
      k_work_init(&send_alarm_work, send_alarm);
      k_work_init(&wifi_status_work, send_wifi_status_request);
      k_work_init(&presence_status_work, send_presence_status_request);
+     k_work_init(&electrical_status_work, send_electrical_status_request);
 
      openthread_state_changed_cb_register(openthread_get_default_context(), &ot_state_chaged_cb);
      openthread_start(openthread_get_default_context());
@@ -268,10 +292,16 @@ void coap_client_send_presence_status_request(void)
      submit_work_if_connected(&presence_status_work);
 }
 
+void coap_client_send_electrical_status_request(void)
+{
+     submit_work_if_connected(&electrical_status_work);
+}
+
 void print_orchestrator_server_ressources(void){
      printk("ORCHESTRATOR [DEBBUG]: Server ressources   ");
      printk("wifi: %s   ", srv_ressources.wifi_status ? "true" : "false");
-     printk("presence: %s\n\r", srv_ressources.presence_status ? "true" : "false");     
+     printk("presence: %s\n\r", srv_ressources.presence_status ? "true" : "false");   
+     printk("electrical: %s\n\r", srv_ressources.electrical_status ? "true" : "false");     
 }
 
 bool get_server_wifi_status(void){
@@ -280,4 +310,8 @@ bool get_server_wifi_status(void){
 
 bool get_server_presence_status(void){
      return srv_ressources.presence_status;
+}
+
+bool get_server_electrical_status(void){
+     return srv_ressources.electrical_status;
 }

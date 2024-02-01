@@ -22,18 +22,22 @@ struct server_context {
     ressources_status_request_callback_t on_ressources_status_request;
     wifi_status_request_callback_t on_wifi_status_request;
     presence_status_request_callback_t on_presence_status_request;
+    electrical_status_request_callback_t on_eletrical_status_request;
     commands_request_callback_t on_commands_request;
     bool wifi_status;
     bool presence_status;
+    bool electrical_status;
 };
 
 static struct server_context srv_context = {
     .ot = NULL,    
     .on_ressources_status_request = NULL,
     .on_wifi_status_request = NULL,
+    .on_eletrical_status_request= NULL,
     .on_commands_request = NULL,
     .wifi_status = NULL,
     .presence_status = NULL,
+    .electrical_status = NULL,
 };
 
 /**@brief Definition of CoAP resources for orchestrator status resources. */
@@ -60,6 +64,14 @@ static otCoapResource presence_status_resource = {
     .mNext = NULL,
 };
 
+/**@brief Definition of CoAP resources for electrical status resources. */
+static otCoapResource electrical_status_resource = {
+    .mUriPath = WIFI_URI_PATH,
+    .mHandler = NULL,
+    .mContext = NULL,
+    .mNext = NULL,
+};
+
 /**@brief Definition of CoAP resources for commands. */
 static otCoapResource commands_resource = {
     .mUriPath = COMMANDS_URI_PATH,
@@ -75,6 +87,17 @@ void set_wifi_status(bool new_status){
 void set_presence_status(bool new_status){
     srv_context.presence_status = new_status;
     printk("SERVER [DEBBUG]: New presence status: %s \n\r", srv_context.presence_status ? "true" : "false");
+}
+void set_electrical_status(bool new_status){
+    srv_context.electrical_status = new_status;
+    printk("SERVER [DEBBUG]: New electrical status: %s \n\r", srv_context.electrical_status ? "true" : "false");
+}
+
+void print_ressources_status(void){
+     printk("ORCHESTRATOR [DEBBUG]: Server ressources   ");
+     printk("wifi: %s   ", srv_context.wifi_status ? "true" : "false");
+     printk("presence: %s\n\r", srv_context.presence_status ? "true" : "false");   
+     printk("electrical: %s\n\r", srv_context.electrical_status ? "true" : "false");     
 }
 
 static otError ressources_status_response_send(otMessage *request_message,
@@ -111,8 +134,12 @@ static otError ressources_status_response_send(otMessage *request_message,
     uint8_t *presence_payload = srv_context.presence_status ? " prs:1" : " prs:0";
     uint16_t presence_payload_size = strlen(presence_payload);
 
+    // Append electrical status to payload
+    uint8_t *electrical_payload = srv_context.electrical_status ? " ele:1" : " ele:0";
+    uint16_t electrical_payload_size = strlen(electrical_payload);
+
     // Get payload size
-    uint16_t payload_size = wifi_payload_size + presence_payload_size + 1;
+    uint16_t payload_size = wifi_payload_size + presence_payload_size + electrical_payload_size + 1;
     uint8_t *payload = (uint8_t*) malloc(payload_size * sizeof(uint8_t));
 
     if(payload == NULL) {
@@ -121,15 +148,22 @@ static otError ressources_status_response_send(otMessage *request_message,
         goto end;
     }
 
-    // Concatenate presence payload
-    for(int i = 0; i < payload_size - 1; i++){
-        if(i < wifi_payload_size){
+    // Concatenate payload
+    for(uint16_t i = 0; i < payload_size - 1; i++){
+        if(i < wifi_payload_size){   
             payload[i] = wifi_payload[i];
         }
         else{
-            payload[i] = presence_payload[i - wifi_payload_size];
+            if(i < wifi_payload_size + presence_payload_size){
+                payload[i] = presence_payload[i - wifi_payload_size];
+            }
+            else{
+                uint16_t new_index = i;
+                new_index = new_index - wifi_payload_size;
+                new_index = new_index - presence_payload_size;
+                payload[i] = electrical_payload[new_index];
+            }
         }
-        
     }
     payload[payload_size - 1 ] = '\0';
     printk("THREAD [DEBBUG]: Sending response payload: %s  payload_size: %d \n\r", payload, payload_size);
@@ -310,6 +344,75 @@ static void presence_status_request_handler(void *context, otMessage *message,
     }
 }
 
+static otError electrical_status_response_send(otMessage *request_message,
+                      const otMessageInfo *message_info)
+{
+    otError error = OT_ERROR_NO_BUFS;
+    otMessage *response;    
+
+    response = otCoapNewMessage(srv_context.ot, NULL);
+    if (response == NULL) {
+        goto end;
+    }
+
+    otCoapMessageInit(response, OT_COAP_TYPE_NON_CONFIRMABLE,
+              OT_COAP_CODE_CONTENT);
+
+    error = otCoapMessageSetToken(
+        response, otCoapMessageGetToken(request_message),
+        otCoapMessageGetTokenLength(request_message));
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    error = otCoapMessageSetPayloadMarker(response);
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    // Append electrical status to payload
+    uint8_t *payload = srv_context.electrical_status ? "ele:1" : "ele:0";
+    uint16_t payload_size = strlen(payload) + 1;
+
+    printk("THREAD [DEBBUG]: Electrical response payload: %s  payload_size: %d \n\r", payload, payload_size);
+
+    error = otMessageAppend(response, payload, payload_size);
+    if (error != OT_ERROR_NONE) {
+        goto end;
+    }
+
+    error = otCoapSendResponse(srv_context.ot, response, message_info);
+
+end:
+    if (error != OT_ERROR_NONE && response != NULL) {
+        otMessageFree(response);
+    }
+
+    return error;
+}
+
+static void electrical_status_request_handler(void *context, otMessage *message,
+                     const otMessageInfo *message_info)
+{
+    otError error;
+    otMessageInfo msg_info;
+
+    ARG_UNUSED(context);
+
+    printk("THREAD [DEBBUG]: Received electrical status request\r\n");
+
+    if ((otCoapMessageGetType(message) == OT_COAP_TYPE_NON_CONFIRMABLE) &&
+        (otCoapMessageGetCode(message) == OT_COAP_CODE_GET)) {
+        msg_info = *message_info;
+        memset(&msg_info.mSockAddr, 0, sizeof(msg_info.mSockAddr));
+
+        error = electrical_status_response_send(message, &msg_info);
+        if (error == OT_ERROR_NONE) {
+            srv_context.on_ressources_status_request();
+        }
+    }
+}
+
 static otError commands_msg_response_send(otMessage *request_message,
                       const otMessageInfo *message_info)
 {
@@ -402,6 +505,7 @@ int ot_coap_init(
     ressources_status_request_callback_t on_ressources_status_request,
     wifi_status_request_callback_t on_wifi_status_request,
     presence_status_request_callback_t on_presence_status_request,
+    electrical_status_request_callback_t on_electrical_status_request,
     commands_request_callback_t on_commands_request  
 )
 {
@@ -409,10 +513,12 @@ int ot_coap_init(
 
     srv_context.wifi_status = false;
     srv_context.presence_status = false;
+    srv_context.electrical_status = false;
 
     srv_context.on_ressources_status_request = on_ressources_status_request;
     srv_context.on_wifi_status_request = on_wifi_status_request;
     srv_context.on_presence_status_request = on_presence_status_request;
+    srv_context.on_eletrical_status_request = on_electrical_status_request;
     srv_context.on_commands_request = on_commands_request;    
 
     srv_context.ot = openthread_get_default_instance();
@@ -430,6 +536,9 @@ int ot_coap_init(
     presence_status_resource.mContext = srv_context.ot;
     presence_status_resource.mHandler = presence_status_request_handler;
 
+    electrical_status_resource.mContext = srv_context.ot;
+    electrical_status_resource.mHandler = electrical_status_request_handler;
+
     commands_resource.mContext = srv_context.ot;
     commands_resource.mHandler = commands_request_handler;
 
@@ -438,6 +547,7 @@ int ot_coap_init(
     otCoapAddResource(srv_context.ot, &ressources_status_resource);
     otCoapAddResource(srv_context.ot, &wifi_status_resource);
     otCoapAddResource(srv_context.ot, &presence_status_resource);
+    otCoapAddResource(srv_context.ot, &electrical_status_resource);
 
     error = otCoapStart(srv_context.ot, COAP_PORT);
     if (error != OT_ERROR_NONE) {

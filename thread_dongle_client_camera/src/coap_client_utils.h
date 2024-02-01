@@ -57,6 +57,11 @@ void coap_client_send_alarm(void);
  */
 void coap_client_send_presence_status_request(void);
 
+/** @brief Request for the CoAP electrical status ressource.
+ *
+ */
+void coap_client_send_electrical_status_request(void);
+
 /** @brief Print the orchestrator server ressources status.
  *
  */
@@ -71,6 +76,11 @@ bool get_server_wifi_status(void);
  *
  */
 bool get_server_presence_status(void);
+
+/** @brief Returns the orchestrator electrical status.
+ *
+ */
+bool get_server_electrical_status(void);
 
 
 

@@ -61,7 +61,16 @@ static void process_received_char(char received_char)
             const char presence_status_char = (char)presence_in_msg[4];
             const bool new_presence_status = presence_status_char == '1' ? true : false;
             set_presence_status(new_presence_status);                
+        }  
+
+        // Check if electrical in message received
+        char* ele_in_msg = strchr(rx_msg_buf, 'e');
+        if(*ele_in_msg != NULL){
+            const char ele_status_char = (char)ele_in_msg[4];
+            const bool new_ele_status = ele_status_char == '1' ? true : false;
+            set_electrical_status(new_ele_status);
         }
+
 		return;
 	}
 	else{
@@ -134,14 +143,24 @@ static void on_presence_status_request()
     dk_set_led_off(RESSOURCES_STATUS_MSG_LED);    
 }
 
+// Callback for electrical topic
+static void on_electrical_status_request()
+{
+    dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+    k_msleep(LED_ON_TIME_MS);
+    dk_set_led_off(RESSOURCES_STATUS_MSG_LED);    
+}
+
 //Callback for button press
 static void on_button_changed(uint32_t button_state, uint32_t has_changed)
 {
     // TODO: What to do if button pressed ???
     uint32_t buttons = button_state & has_changed;
     if (buttons & DK_BTN1_MSK) {
+        //  print_ressources_status();
         //  switch_wifi_status();
         //  switch_presence_status();
+        //  switch_electrical_status();
     }    
 }
 
@@ -175,6 +194,7 @@ int main(void)
         &on_ressource_status_request, 
         &on_wifi_status_request, 
         &on_presence_status_request, 
+        &on_electrical_status_request, 
         &on_commands_request
     );
     
