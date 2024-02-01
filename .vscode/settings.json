@@ -11,6 +11,7 @@
         "utility": "c",
         "uart.h": "c",
         "printk.h": "c",
-        "util.h": "c"
+        "util.h": "c",
+        "log.h": "c"
     }
 }
