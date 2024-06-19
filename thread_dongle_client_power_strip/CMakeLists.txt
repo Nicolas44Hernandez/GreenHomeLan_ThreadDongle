@@ -7,10 +7,10 @@ cmake_minimum_required(VERSION 3.20.0)
 
 find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
-project(thread_coap_client_dongle_buttons_matrix)
+project(thread_coap_client_dongle_power_strip)
 
 # NORDIC SDK APP START
-target_sources(app PRIVATE src/thread_dongle_client_buttons_matrix.c
+target_sources(app PRIVATE src/thread_dongle_client_power_strip.c
                   src/coap_client_utils.c)
 
 target_include_directories(app PUBLIC ../thread_dongle_server/interface)

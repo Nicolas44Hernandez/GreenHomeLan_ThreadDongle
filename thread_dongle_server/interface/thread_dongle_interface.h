@@ -17,12 +17,14 @@
 #define WIFI_URI_PATH "wifi"
 #define PRESENCE_URI_PATH "presence"
 #define ELECTRIC_URI_PATH "energy"
+#define POWER_STRIP_URI_PATH "power_strip"
 
 #define ALARM "al_bt_em"
 #define CMD1 "cmd_1"
 #define KEEP_ALIVE_DEVICE_ID_1 "ka_1"
 #define KEEP_ALIVE_DEVICE_ID_2 "ka_2"
 #define KEEP_ALIVE_DEVICE_ID_3 "ka_3"
+#define KEEP_ALIVE_DEVICE_ID_4 "ka_4"
 
 
 /*LEDS configuration*/

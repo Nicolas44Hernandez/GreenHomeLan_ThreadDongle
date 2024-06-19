@@ -17,15 +17,15 @@
 
 static bool is_connected;
 
-static struct k_work multicast_commands_work;
 static struct k_work send_keep_alive_work;
+static struct k_work power_strip_status_work;
 static struct k_work on_connect_work;
 static struct k_work on_disconnect_work;
 
-uint16_t cmd_to_send_nb = 0;
 
 /* Options supported by the server */
 static const char *const commands_option[] = { COMMANDS_URI_PATH, NULL };
+static const char *const power_strip_status_option[] = { POWER_STRIP_URI_PATH, NULL };
 
 /* Thread multicast mesh local address */
 static struct sockaddr_in6 multicast_local_addr = {
@@ -34,6 +34,21 @@ static struct sockaddr_in6 multicast_local_addr = {
      .sin6_addr.s6_addr = { 0xff, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                       0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01 },
      .sin6_scope_id = 0U
+};
+
+// Variable for storing orchestrator server ressources */
+struct server_ressources {
+     bool r1_status;
+     bool r2_status;
+     bool r3_status;
+     bool r4_status;
+};
+
+static struct server_ressources srv_ressources = {
+    .r1_status = NULL,
+    .r2_status = NULL,
+    .r3_status = NULL,
+    .r4_status = NULL,
 };
 
 static int on_commands_msg_reply(const struct coap_packet *response,
@@ -60,25 +75,50 @@ exit:
      return 0;
 }
 
-
-static void send_commands_to_server_message(struct k_work *item)
+static int on_power_strip_status_reply(const struct coap_packet *response,
+                     struct coap_reply *reply,
+                     const struct sockaddr *from)
 {
-     ARG_UNUSED(item);
+     const uint8_t *payload;
+     uint16_t payload_size = 0u;
 
-     printk("THREAD [DEBBUG]: Sending command to server \r\n");
-     
-     uint8_t msg_buf[] = "cmd_X ";
-     uint16_t msg_len = 6;
-     msg_buf[4] = cmd_to_send_nb + '0';     
+     ARG_UNUSED(reply);
+     ARG_UNUSED(from);
 
-     int ret_coap_req = coap_send_request(
-          COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
-          commands_option, &msg_buf, msg_len, on_commands_msg_reply);
-     
-     dk_set_led_on(COMMANDS_MSG_LED);
-     
-     // Clear variable
-     cmd_to_send_nb = 0; 
+     printk("THREAD [DEBBUG]: Power strip status reply received from server \r\n");     
+
+     dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
+
+     payload = coap_packet_get_payload(response, &payload_size); 
+
+     // Print payload
+     printk("THREAD [DEBBUG]: Received payload: size: %d  payload ", payload_size);
+		for( int i =0; i < payload_size; i++ ){
+			printk("%c", payload[i]);
+     }
+     printk("\r\n");
+
+     // Check if outlet in payload
+     char* outlet_in_payload = strchr(payload, 'o');
+     if(*outlet_in_payload != NULL){
+          // Retreive relays status
+          const char r1_status_char = (char)payload[8];
+          const char r2_status_char = (char)payload[9];
+          const char r3_status_char = (char)payload[10];
+          const char r4_status_char = (char)payload[11];
+          bool r1_received_status = r1_status_char == '1' ? true : false;   
+          bool r2_received_status = r2_status_char == '1' ? true : false;   
+          bool r3_received_status = r3_status_char == '1' ? true : false;   
+          bool r4_received_status = r4_status_char == '1' ? true : false; 
+
+          // Set new status to server ressources instance
+          srv_ressources.r1_status=r1_received_status;
+          srv_ressources.r2_status=r2_received_status;
+          srv_ressources.r3_status=r3_received_status;
+          srv_ressources.r4_status=r4_received_status;          
+     }
+exit:
+     return 0;
 }
 
 static void send_keep_alive(struct k_work *item)
@@ -87,7 +127,7 @@ static void send_keep_alive(struct k_work *item)
 
      printk("THREAD [DEBBUG]: Sending keep alive msg to server \r\n");
 
-     static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_3;
+     static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_4;
      uint16_t msg_len = sizeof(msg_buf);
 
      int ret_coap_req = coap_send_request(
@@ -96,6 +136,35 @@ static void send_keep_alive(struct k_work *item)
      
      dk_set_led_on(COMMANDS_MSG_LED);
 }
+
+static void send_power_strip_status_request(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending power strip status request to server \r\n");
+
+     coap_send_request(COAP_METHOD_GET,
+                 (const struct sockaddr *)&multicast_local_addr,
+                 power_strip_status_option, NULL, 0u, on_power_strip_status_reply);
+     dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+}
+
+bool get_server_r1_status(void){
+     return srv_ressources.r1_status;
+}
+
+bool get_server_r2_status(void){
+     return srv_ressources.r2_status;
+}
+
+bool get_server_r3_status(void){
+     return srv_ressources.r3_status;
+}
+
+bool get_server_r4_status(void){
+     return srv_ressources.r4_status;
+}
+
 static void on_thread_state_changed(otChangedFlags flags, struct openthread_context *ot_context,
                         void *user_data)
 {
@@ -138,23 +207,19 @@ void coap_client_utils_init(ot_connection_cb_t on_connect, ot_disconnection_cb_t
 
      k_work_init(&on_connect_work, on_connect);
      k_work_init(&on_disconnect_work, on_disconnect);
-     k_work_init(&multicast_commands_work, send_commands_to_server_message);
      k_work_init(&send_keep_alive_work, send_keep_alive);
+     k_work_init(&power_strip_status_work, send_power_strip_status_request);
 
      openthread_state_changed_cb_register(openthread_get_default_context(), &ot_state_chaged_cb);
      openthread_start(openthread_get_default_context());
 }
 
-void coap_client_send_command_to_server_message(uint16_t cmd_number){
-
-     printk("THREAD [DEBBUG]: Sending command %d to server \r\n", cmd_number); 
-
-     cmd_to_send_nb = cmd_number;
-      
-     submit_work_if_connected(&multicast_commands_work);
-}
-
 void coap_client_send_keep_alive(void)
 {
      submit_work_if_connected(&send_keep_alive_work);
+}
+
+void coap_client_send_power_strip_status_request(void)
+{
+     submit_work_if_connected(&power_strip_status_work);
 }

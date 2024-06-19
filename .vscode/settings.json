@@ -12,6 +12,7 @@
         "uart.h": "c",
         "printk.h": "c",
         "util.h": "c",
-        "log.h": "c"
+        "log.h": "c",
+        "coap_client_utils.h": "c"
     }
 }

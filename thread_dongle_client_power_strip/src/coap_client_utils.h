@@ -36,11 +36,30 @@ void coap_client_utils_init(ot_connection_cb_t on_connect,
  */
 void coap_client_send_keep_alive(void);
 
-/** @brief Send a action to the CoAP server node.
+/** @brief Request for the CoAP power strip status ressource.
  *
- * @note The CoAP server should be paired before to have an affect.
  */
-void coap_client_send_command_to_server_message(uint16_t cmd_number);
+void coap_client_send_power_strip_status_request(void);
+
+/** @brief Returns the orchestrator r1 status.
+ *
+ */
+bool get_server_r1_status(void);
+
+/** @brief Returns the orchestrator r2 status.
+ *
+ */
+bool get_server_r2_status(void);
+
+/** @brief Returns the orchestrator r3 status.
+ *
+ */
+bool get_server_r3_status(void);
+
+/** @brief Returns the orchestrator r4 status.
+ *
+ */
+bool get_server_r4_status(void);
 
 #endif
 
