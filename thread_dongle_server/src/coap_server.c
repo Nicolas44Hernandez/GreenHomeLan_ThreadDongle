@@ -71,6 +71,21 @@ static void process_received_char(char received_char)
             set_electrical_status(new_ele_status);
         }
 
+        // Check if oulet in message received
+        char* outlet_in_msg = strchr(rx_msg_buf, 'o');
+        if(*outlet_in_msg != NULL){
+            const char r1_status_char = (char)outlet_in_msg[7];
+            const char r2_status_char = (char)outlet_in_msg[8];
+            const char r3_status_char = (char)outlet_in_msg[9];
+            const char r4_status_char = (char)outlet_in_msg[10];
+
+            const bool new_r1_status = r1_status_char == '1' ? true : false;
+            const bool new_r2_status = r2_status_char == '1' ? true : false;
+            const bool new_r3_status = r3_status_char == '1' ? true : false;
+            const bool new_r4_status = r4_status_char == '1' ? true : false;
+            set_power_strip_status(new_r1_status, new_r2_status, new_r3_status, new_r4_status);
+        }
+
 		return;
 	}
 	else{
@@ -151,16 +166,25 @@ static void on_electrical_status_request()
     dk_set_led_off(RESSOURCES_STATUS_MSG_LED);    
 }
 
+// Callback for power strip topic
+static void on_power_strip_status_request()
+{
+    dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+    k_msleep(LED_ON_TIME_MS);
+    dk_set_led_off(RESSOURCES_STATUS_MSG_LED);    
+}
+
 //Callback for button press
 static void on_button_changed(uint32_t button_state, uint32_t has_changed)
 {
     // TODO: What to do if button pressed ???
     uint32_t buttons = button_state & has_changed;
-    if (buttons & DK_BTN1_MSK) {
-        //  print_ressources_status();
-        //  switch_wifi_status();
-        //  switch_presence_status();
-        //  switch_electrical_status();
+    if (buttons & DK_BTN1_MSK){      
+        // switch_wifi_status();
+        // switch_presence_status();
+        // switch_electrical_status();
+        //switch_power_strip_status();
+        print_ressources_status();
     }    
 }
 
@@ -195,6 +219,7 @@ int main(void)
         &on_wifi_status_request, 
         &on_presence_status_request, 
         &on_electrical_status_request, 
+        &on_power_strip_status_request, 
         &on_commands_request
     );
     
