@@ -127,7 +127,7 @@ static void send_keep_alive(struct k_work *item)
 
      printk("THREAD [DEBBUG]: Sending keep alive msg to server \r\n");
 
-     static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_4;
+     static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_7;
      uint16_t msg_len = sizeof(msg_buf);
 
      int ret_coap_req = coap_send_request(

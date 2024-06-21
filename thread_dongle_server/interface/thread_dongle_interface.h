@@ -25,6 +25,9 @@
 #define KEEP_ALIVE_DEVICE_ID_2 "ka_2"
 #define KEEP_ALIVE_DEVICE_ID_3 "ka_3"
 #define KEEP_ALIVE_DEVICE_ID_4 "ka_4"
+#define KEEP_ALIVE_DEVICE_ID_5 "ka_5"
+#define KEEP_ALIVE_DEVICE_ID_6 "ka_6"
+#define KEEP_ALIVE_DEVICE_ID_7 "ka_7"
 
 
 /*LEDS configuration*/

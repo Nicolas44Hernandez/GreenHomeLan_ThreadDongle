@@ -19,7 +19,7 @@
 
 // Buttons pressed check period
 #define KEEP_ALIVE_MSG_PERIOD_MS   10000
-#define REQUEST_STATUS_PERIOD_MS   4000
+#define REQUEST_STATUS_PERIOD_MS   2000
 
 // Setup for L1 and L2
 static const struct gpio_dt_spec relay_1 = GPIO_DT_SPEC_GET(DT_ALIAS(relay1), gpios);
