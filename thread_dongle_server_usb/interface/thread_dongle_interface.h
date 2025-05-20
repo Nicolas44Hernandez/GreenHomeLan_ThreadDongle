@@ -18,6 +18,7 @@
 #define PRESENCE_URI_PATH "presence"
 #define ELECTRIC_URI_PATH "energy"
 #define POWER_STRIP_URI_PATH "power_strip"
+#define POWER_STRIP_BACKUP_URI_PATH "power_strip_backup"
 
 #define ALARM "al_bt_em"
 #define CMD1 "cmd_1"

@@ -10,8 +10,8 @@ echo PROGRAM: $PROGRAM
 echo ------------------------------
 
 # Build
-cd my-workspace
-west build -p always -b dongle_nrf52840 ../$PROGRAM/
+cd ../my-workspace
+west build -p always -b dongle_nrf52840 ../GreenHomeLan_ThreadDongle/$PROGRAM
 
 # Copy generated file
 cd ..

@@ -87,7 +87,7 @@ sudo udevadm control --reload
 
 ``` 
 chmod +x build.sh
-./build.sh thread_dongle_client
+./GreenHomeLan_ThreadDongle/build.sh GreenHomeLan_ThreadDongle/thread_dongle_client
 ```
 
 The .uf2 generated file can be find in build/thread_dongle_client.uf2
@@ -95,7 +95,7 @@ The .uf2 generated file can be find in build/thread_dongle_client.uf2
 ## Build Server
 ``` 
 chmod +x build.sh
-./build.sh thread_dongle_server
+./GreenHomeLan_ThreadDongle/build.sh GreenHomeLan_ThreadDongle/thread_dongle_server
 ```
 
 The .uf2 generated file can be find in build/thread_dongle_server.uf2
