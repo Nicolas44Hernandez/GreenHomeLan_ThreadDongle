@@ -15,6 +15,28 @@
         zephyr,entropy = &rng;
         zephyr,shell-uart = &cdc_acm_uart0;
     };
+    aliases {
+        relay1 = &myled0;
+        relay2 = &myled1;
+        relay3 = &myled2;
+        relay4 = &myled3;
+    };
+
+    leds {
+            compatible = "gpio-leds";
+            myled0: led_4 {
+                    gpios = <&gpio0 4 GPIO_ACTIVE_HIGH>;
+            };
+            myled1: led_5 {
+                gpios = <&gpio0 5 GPIO_ACTIVE_HIGH>;
+            };
+            myled2: led_6 {
+                gpios = <&gpio0 6 GPIO_ACTIVE_HIGH>;
+            };
+            myled3: led_7 {
+                gpios = <&gpio0 7 GPIO_ACTIVE_HIGH>;
+            };
+    };
 };
 
 &adc {

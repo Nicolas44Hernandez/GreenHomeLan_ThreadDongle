@@ -17,7 +17,8 @@
 #include "coap_client_utils.h"
 
 // Server polling period
-#define SERVER_POLLING_PERIOD_MS 20000
+#define SERVER_POLLING_PERIOD_MS   2000
+#define KEEP_ALIVE_MSG_PERIOD_MS   20000
 
 // UART variables
 #define UART_RECEIVE_TIMEOUT 500000
@@ -28,80 +29,6 @@ const struct device *uart= DEVICE_DT_GET(DT_NODELABEL(uart0));
 static uint8_t rx_buf[MSG_BUFF_SIZE] = {0};
 static uint8_t rx_msg_buf[MSG_MAX_SIZE] = {0};
 static uint8_t rx_offset=0;
-
-/*Send the server ressources status via uart*/
-static void uart_send_server_ressources_status(){
-
-    bool wifi_status = get_server_wifi_status();
-    bool presence_status = get_server_presence_status();
-
-    printk("SERVER [DEBBUG]: current ressources status  wifi:%d   presence:%d\r\n", wifi_status, presence_status);
-
-    // msg buffer
-    static uint8_t tx_buf[] =   "~wifi:0prs:0#";
-
-    // Add wifi status
-    if(wifi_status){tx_buf[6] = '1';}
-    else{tx_buf[6] = '0';}
-
-    // Add presence status
-    if(presence_status){tx_buf[11] = '1';}
-    else{tx_buf[11] = '0';}
-
-    int ret = uart_tx(uart, tx_buf, sizeof(tx_buf), SYS_FOREVER_MS);
-    printk("UART [DEBBUG]: Sending ressources status via UART: %s\r\n", tx_buf);
-    if (ret) {
-        printk("UART [ERROR]: Impossible to send message over UART\r\n");
-        return 1;
-    }
-}
-/* Process received char from UART */
-static void process_received_char(char received_char)
-{
-	if(received_char == START_CHAR){
-		// Empty msg buffer
-		for( int i =0; i < MSG_MAX_SIZE; i++ ){
-			rx_msg_buf[i] = NULL;
-        }
-		rx_offset = 0;
-		return;
-	}
-	if(received_char == END_CHAR){
-		printk("UART [DEBBUG]: Received message: ");
-		for( int i =0; i < rx_offset; i++ ){
-			printk("%c", rx_msg_buf[i]);
-        }
-		printk("\r\n");
-        printk("THREAD [DEBBUG]: Transfer received message via thread\r\n");
-         
-        coap_client_send_commands_to_server_message(&rx_msg_buf, rx_offset);        
-		return;
-	}
-	else{
-		rx_msg_buf[rx_offset]=received_char;
-		rx_offset ++;
-		return;
-	}
-
-} 
-
-/*Callback for uart messages reception*/
-static void on_uart_message(const struct device *uart_dev, struct uart_event *evt, void *user_data)
-{
-    //printk("UART event\r\n");
-	switch (evt->type) {				
-	case UART_RX_RDY:
-        for( int i =0; i < evt->data.rx.len; i++ ){
-			process_received_char(evt->data.rx.buf[evt->data.rx.offset + i]);
-        }	
-		break;			
-	case UART_RX_DISABLED:
-		uart_rx_enable(uart_dev, rx_buf, sizeof(rx_buf), UART_RECEIVE_TIMEOUT);
-		break;
-	default:
-		break;
-	}
-}
 
 static void on_ot_connect(struct k_work *item)
 {
@@ -119,7 +46,14 @@ static void on_button_changed(uint32_t button_state, uint32_t has_changed)
 {
     uint32_t buttons = button_state & has_changed;
     if (buttons & DK_BTN1_MSK) {
-        coap_client_send_alarm();
+        
+        if(connected_to_coap_server_in_border_router()){
+            coap_client_send_alarm();
+        }
+        else{
+            coap_client_send_power_strip_switch_status_request_backup();
+        }
+        
     }
 }
 
@@ -146,36 +80,36 @@ int main(void)
 
     // Init thread/coap
     coap_client_utils_init(on_ot_connect, on_ot_disconnect);
-    
-    // Structure to configure uart communication
-    const struct uart_config uart_cfg = {
-		.baudrate = 115200,
-		.parity = UART_CFG_PARITY_NONE,
-		.stop_bits = UART_CFG_STOP_BITS_1,
-		.data_bits = UART_CFG_DATA_BITS_8,
-		.flow_ctrl = UART_CFG_FLOW_CTRL_NONE
-	};
 
-    // Configure uart0 device
-    ret = uart_configure(uart, &uart_cfg);
-	if (ret == -ENOSYS) {
-		return -ENOSYS;
-	}
+    // Send first keep alive 
+    coap_client_send_keep_alive();     
+    k_msleep(SERVER_POLLING_PERIOD_MS*0.2); 
+    bool border_router_responding = connected_to_coap_server_in_border_router(); 
 
-    // Register uart callback function    
-    ret = uart_callback_set(uart, on_uart_message, NULL);
-    if (ret) {
-        printk("UART [ERROR]: Imposible to registre callback ret=%d\r\n", ret);	
-        return 1;
-    } 
+    // Set client loop params
+    int wait_loops_for_ka = KEEP_ALIVE_MSG_PERIOD_MS / SERVER_POLLING_PERIOD_MS;
+    int loops_count = 0;
 
-    // Start uart receiving reception in buffer
-    uart_rx_enable(uart, rx_buf, sizeof(rx_buf), UART_RECEIVE_TIMEOUT);
-    
-    // loop forever waiting for uart messages
-    while (1) {                
-        k_msleep(SERVER_POLLING_PERIOD_MS); 
-        coap_client_send_keep_alive();     
+    // loop forever
+    while (true) {  
+        k_msleep(SERVER_POLLING_PERIOD_MS);
+        border_router_responding = connected_to_coap_server_in_border_router();  
+
+        if(!border_router_responding){
+            // Leds off
+            dk_set_led_off(COMMANDS_MSG_LED); 
+            dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
+            // Get power strip status
+            coap_client_send_power_strip_status_request_backup();
+            k_msleep(1000);            
+        }       
+
+        if (loops_count >=wait_loops_for_ka ){
+            coap_client_send_keep_alive();  
+            loops_count = 0;
+        }        
+
+        loops_count ++; 
 	}
     return 0;
 }

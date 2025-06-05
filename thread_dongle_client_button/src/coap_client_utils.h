@@ -47,6 +47,16 @@ void coap_client_send_ressources_status_request(void);
  */
 void coap_client_send_wifi_status_request(void);
 
+/** @brief Request for the CoAP power strip status ressource.
+ *
+ */
+void coap_client_send_power_strip_status_request_backup(void);
+
+/** @brief Update request for the CoAP power strip status ressource.
+ *
+ */
+void coap_client_send_power_strip_switch_status_request_backup(void);
+
 /** @brief Request for post button alarm.
  *
  */
@@ -76,6 +86,11 @@ bool get_server_wifi_status(void);
  *
  */
 bool get_server_presence_status(void);
+
+/** @brief Is connected to server ?.
+ *
+ */
+bool connected_to_coap_server_in_border_router();
 
 
 

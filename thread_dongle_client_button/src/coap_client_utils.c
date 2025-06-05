@@ -16,6 +16,7 @@
 #include "coap_client_utils.h"
 
 static bool is_connected;
+static bool border_router_coap_server_has_responded;
 
 static struct k_work multicast_commands_work;
 static struct k_work ressources_status_work;
@@ -23,6 +24,8 @@ static struct k_work send_alarm_work;
 static struct k_work send_keep_alive_work;
 static struct k_work wifi_status_work;
 static struct k_work presence_status_work;
+static struct k_work power_strip_status_work;
+static struct k_work power_strip_switch_status_work;
 static struct k_work on_connect_work;
 static struct k_work on_disconnect_work;
 
@@ -31,6 +34,7 @@ static const char *const commands_option[] = { COMMANDS_URI_PATH, NULL };
 static const char *const ressources_status_option[] = { RESSOURCES_URI_PATH, NULL };
 static const char *const wifi_status_option[] = { WIFI_URI_PATH, NULL };
 static const char *const presence_status_option[] = { PRESENCE_URI_PATH, NULL };
+static const char *const power_strip_status_backup_option[] = { POWER_STRIP_BACKUP_URI_PATH, NULL };
 
 volatile uint8_t msg_buf[MSG_BUFF_SIZE] = {0};
 uint16_t msg_len = 0;
@@ -46,13 +50,21 @@ static struct sockaddr_in6 multicast_local_addr = {
 
 // Variable for storing orchestrator server ressources */
 struct server_ressources {
-    bool wifi_status;
-    bool presence_status;
+     bool wifi_status;
+     bool presence_status;
+     bool r1_status;
+     bool r2_status;
+     bool r3_status;
+     bool r4_status;
 };
 
 static struct server_ressources srv_ressources = {
     .wifi_status = NULL,
     .presence_status = NULL,
+    .r1_status = NULL,
+    .r2_status = NULL,
+    .r3_status = NULL,
+    .r4_status = NULL,
 };
 
 static int on_commands_msg_reply(const struct coap_packet *response,
@@ -61,6 +73,8 @@ static int on_commands_msg_reply(const struct coap_packet *response,
 {
      ARG_UNUSED(reply);
      ARG_UNUSED(from);   
+
+     border_router_coap_server_has_responded = true;
 
      const uint8_t *payload;
      uint16_t payload_size = 0u; 
@@ -72,7 +86,7 @@ static int on_commands_msg_reply(const struct coap_packet *response,
 
      // Check if CMD:OK in payload
      if (strstr(payload, cmd_ok) != NULL) {
-          printk("THREAD [DEBBUG]: commands msg reply: CMD_ACK\r\n"); 
+          printk("THREAD [DEBUG]: commands msg reply: CMD_ACK\r\n"); 
           dk_set_led_off(COMMANDS_MSG_LED);     
      }
 exit:
@@ -84,7 +98,7 @@ static void send_commands_to_server_message(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending command to server \r\n");
+     printk("THREAD [DEBUG]: Sending command to server \r\n");
 
      int ret_coap_req = coap_send_request(
           COAP_METHOD_PUT,(const struct sockaddr *)&multicast_local_addr,
@@ -109,7 +123,7 @@ static int on_ressource_status_reply(const struct coap_packet *response,
      ARG_UNUSED(reply);
      ARG_UNUSED(from);
 
-     printk("THREAD [DEBBUG]: Ressource status reply received from server \r\n");     
+     printk("THREAD [DEBUG]: Ressource status reply received from server \r\n");     
 
      dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
 
@@ -138,7 +152,7 @@ static void send_ressources_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending ressources status request to server \r\n");
+     printk("THREAD [DEBUG]: Sending ressources status request to server \r\n");
 
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
@@ -150,7 +164,11 @@ static void send_alarm(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending alarm to server \r\n");
+     // TODO: evaluate if server in border router is responding
+     // Send alarm if connected border router server
+     // Send relays status on/off if connected to server in power strip
+
+     printk("THREAD [DEBUG]: Sending alarm to server \r\n");
 
      static uint8_t msg_buf[] = CMD1;
      uint16_t msg_len = sizeof(msg_buf);
@@ -166,7 +184,9 @@ static void send_keep_alive(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending keep alive msg to server \r\n");
+     border_router_coap_server_has_responded = false;
+
+     printk("THREAD [DEBUG]: Sending keep alive msg to server \r\n");
 
      static uint8_t msg_buf[] = KEEP_ALIVE_DEVICE_ID_2;
      uint16_t msg_len = sizeof(msg_buf);
@@ -178,12 +198,11 @@ static void send_keep_alive(struct k_work *item)
      dk_set_led_on(COMMANDS_MSG_LED);
 }
 
-
 static void send_wifi_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending wifi status request to server \r\n");
+     printk("THREAD [DEBUG]: Sending wifi status request to server \r\n");
 
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
@@ -195,13 +214,102 @@ static void send_presence_status_request(struct k_work *item)
 {
      ARG_UNUSED(item);
 
-     printk("THREAD [DEBBUG]: Sending presence status request to server \r\n");
+     printk("THREAD [DEBUG]: Sending presence status request to server \r\n");
 
      coap_send_request(COAP_METHOD_GET,
                  (const struct sockaddr *)&multicast_local_addr,
                  presence_status_option, NULL, 0u, on_ressource_status_reply);
      dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
 }
+
+static int on_power_strip_status_reply(const struct coap_packet *response,
+                     struct coap_reply *reply,
+                     const struct sockaddr *from)
+{
+     const uint8_t *payload;
+     uint16_t payload_size = 0u;
+
+     ARG_UNUSED(reply);
+     ARG_UNUSED(from);
+
+     printk("THREAD [DEBBUG]: Power strip status reply received from server \r\n");     
+
+     dk_set_led_off(RESSOURCES_STATUS_MSG_LED);
+
+     payload = coap_packet_get_payload(response, &payload_size); 
+
+     // Print payload
+     printk("THREAD [DEBBUG]: Received payload: size: %d  payload ", payload_size);
+		for( int i =0; i < payload_size; i++ ){
+			printk("%c", payload[i]);
+     }
+     printk("\r\n");
+
+     // Check if outlet in payload
+     char* outlet_in_payload = strchr(payload, 'o');
+     if(*outlet_in_payload != NULL){
+          // Retreive relays status
+          const char r1_status_char = (char)payload[8];
+          const char r2_status_char = (char)payload[9];
+          const char r3_status_char = (char)payload[10];
+          const char r4_status_char = (char)payload[11];
+          bool r1_received_status = r1_status_char == '1' ? true : false;   
+          bool r2_received_status = r2_status_char == '1' ? true : false;   
+          bool r3_received_status = r3_status_char == '1' ? true : false;   
+          bool r4_received_status = r4_status_char == '1' ? true : false; 
+
+          // Set new status to server ressources instance
+          srv_ressources.r1_status=r1_received_status;
+          srv_ressources.r2_status=r2_received_status;
+          srv_ressources.r3_status=r3_received_status;
+          srv_ressources.r4_status=r4_received_status;          
+     }
+     
+     return 0;
+}
+
+static void send_power_strip_status_request(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending power strip status request to backup server \r\n");
+
+     coap_send_request(COAP_METHOD_GET,
+                 (const struct sockaddr *)&multicast_local_addr,
+                 power_strip_status_backup_option, NULL, 0u, on_power_strip_status_reply);
+     dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+}
+
+static void send_power_strip_switch_status_request(struct k_work *item)
+{
+     ARG_UNUSED(item);
+
+     printk("THREAD [DEBBUG]: Sending power strip update status request to server  R1: %s, R2: %s, R3: %s, R4: %s\r\n",
+       srv_ressources.r1_status ? "true" : "false",
+       srv_ressources.r2_status ? "true" : "false",
+       srv_ressources.r3_status ? "true" : "false",
+       srv_ressources.r4_status ? "true" : "false");
+
+     // Prepare payload 
+     const char *payload_fmt = " outlet:%s";
+     char payload[16];
+
+
+     snprintf(payload, sizeof(payload), payload_fmt,
+          (srv_ressources.r1_status || srv_ressources.r2_status || srv_ressources.r3_status || srv_ressources.r4_status) ? "0000\0" : "1111");
+
+     printk("THREAD [DEBBUG]: relays status copied to payload");
+
+     coap_send_request(COAP_METHOD_PUT,
+                      (const struct sockaddr *)&multicast_local_addr,
+                      power_strip_status_backup_option,
+                      (const uint8_t *)payload,
+                      strlen(payload),
+                      on_power_strip_status_reply);
+ 
+     dk_set_led_on(RESSOURCES_STATUS_MSG_LED);
+}
+
 
 static void on_thread_state_changed(otChangedFlags flags, struct openthread_context *ot_context,
                         void *user_data)
@@ -235,6 +343,7 @@ static void submit_work_if_connected(struct k_work *work)
           k_work_submit(work);
      } else {
           printk("THREAD [ERROR]: Connection is broken \r\n");
+          border_router_coap_server_has_responded = false;
      }
 }
 
@@ -251,6 +360,8 @@ void coap_client_utils_init(ot_connection_cb_t on_connect, ot_disconnection_cb_t
      k_work_init(&send_keep_alive_work, send_keep_alive);
      k_work_init(&wifi_status_work, send_wifi_status_request);
      k_work_init(&presence_status_work, send_presence_status_request);
+     k_work_init(&power_strip_status_work, send_power_strip_status_request);
+     k_work_init(&power_strip_switch_status_work, send_power_strip_switch_status_request);
 
      openthread_state_changed_cb_register(openthread_get_default_context(), &ot_state_chaged_cb);
      openthread_start(openthread_get_default_context());
@@ -292,9 +403,20 @@ void coap_client_send_presence_status_request(void)
 }
 
 void print_orchestrator_server_ressources(void){
-     printk("ORCHESTRATOR [DEBBUG]: Server ressources   ");
+     printk("RESSOURCES [DEBUG]: Server ressources   ");
      printk("wifi: %s   ", srv_ressources.wifi_status ? "true" : "false");
      printk("presence: %s\n\r", srv_ressources.presence_status ? "true" : "false");     
+}
+
+void coap_client_send_power_strip_status_request_backup(void)
+{
+     submit_work_if_connected(&power_strip_status_work);
+}
+
+void coap_client_send_power_strip_switch_status_request_backup()
+{     
+     // submit work
+     submit_work_if_connected(&power_strip_switch_status_work);
 }
 
 bool get_server_wifi_status(void){
@@ -303,4 +425,13 @@ bool get_server_wifi_status(void){
 
 bool get_server_presence_status(void){
      return srv_ressources.presence_status;
+}
+
+bool connected_to_coap_server_in_border_router()
+{    
+     if(!border_router_coap_server_has_responded){
+          printk("THREAD [DEBUG]:CoAP server in border router not responding \r\n");
+          return false;
+     }
+     return true;
 }

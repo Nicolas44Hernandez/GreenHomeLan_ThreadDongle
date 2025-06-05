@@ -14,6 +14,10 @@
         "util.h": "c",
         "log.h": "c",
         "coap_client_utils.h": "c",
-        "sstream": "c"
+        "sstream": "c",
+        "ot_coap_utils.h": "c",
+        "thread_dongle_interface.h": "c",
+        "relays_utils.h": "c",
+        "coap_server.h": "c"
     }
 }
